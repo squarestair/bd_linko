@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -24,23 +25,31 @@ func main() {
 	os.Exit(status)
 }
 
-func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
-	f, err := os.OpenFile("linko.access.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0776)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+func initializeLogger() *log.Logger {
+	log_file_path, exists := os.LookupEnv("LINKO_LOG_FILE")
+	if !exists {
+		return log.New(os.Stderr, "", log.LstdFlags)
+	} else {
+		file, err := os.OpenFile(log_file_path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+		if err != nil {
+			log.Fatalf("failed to open log file: %v", err)
+		}
+		multiWriter := io.MultiWriter(os.Stderr, file)
+		return log.New(multiWriter, "", log.LstdFlags)
 	}
-	defer f.Close()
+}
 
-	var accessLogger = log.New(f, "INFO: ", log.LstdFlags)
-	var stdLogger = log.New(os.Stderr, "DEBUG: ", log.LstdFlags)
+func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
 
-	stdLogger.Printf("Linko is running on http://localhost:%d", httpPort)
-	st, err := store.New(dataDir, stdLogger)
+	var logger = initializeLogger()
+
+	logger.Printf("Linko is running on http://localhost:%d", httpPort)
+	st, err := store.New(dataDir, logger)
 	if err != nil {
-		stdLogger.Printf("failed to create store: %v", err)
+		logger.Printf("failed to create store: %v", err)
 		return 1
 	}
-	s := newServer(*st, httpPort, cancel, accessLogger)
+	s := newServer(*st, httpPort, cancel, logger)
 	var serverErr error
 	go func() {
 		serverErr = s.start()
@@ -50,14 +59,14 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	logger.Printf("Linko is shutting down")
 	if err := s.shutdown(shutdownCtx); err != nil {
-		stdLogger.Printf("failed to shutdown server: %v", err)
+		logger.Printf("failed to shutdown server: %v", err)
 		return 1
 	}
 	if serverErr != nil {
-		stdLogger.Printf("server error: %v", serverErr)
+		logger.Printf("server error: %v", serverErr)
 		return 1
 	}
-	stdLogger.Printf("Linko is shutting down")
 	return 0
 }
