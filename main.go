@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"io"
@@ -28,14 +29,14 @@ func main() {
 func initializeLogger() *log.Logger {
 	log_file_path, exists := os.LookupEnv("LINKO_LOG_FILE")
 	if !exists {
-		return log.New(os.Stderr, "", log.LstdFlags)
+		return log.New(bufio.NewWriterSize(os.Stderr, 8192), "", log.LstdFlags)
 	} else {
 		file, err := os.OpenFile(log_file_path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 		if err != nil {
 			log.Fatalf("failed to open log file: %v", err)
 		}
 		multiWriter := io.MultiWriter(os.Stderr, file)
-		return log.New(multiWriter, "", log.LstdFlags)
+		return log.New(bufio.NewWriterSize(multiWriter, 8192), "", log.LstdFlags)
 	}
 }
 
