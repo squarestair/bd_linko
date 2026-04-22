@@ -21,10 +21,12 @@ func main() {
 
 	status := run(ctx, cancel, *httpPort, *dataDir)
 	cancel()
+	fmt.Print("\nLinko is shutting down")
 	os.Exit(status)
 }
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
+	fmt.Printf("Linko is running on http://localhost:%d", httpPort)
 	st, err := store.New(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create store: %v\n", err)
